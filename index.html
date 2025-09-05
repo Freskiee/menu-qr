@@ -46,7 +46,8 @@
     // Tiempos
     const REDIRECT_DELAY = 2500;  // ms en pantalla de carga
     const LOG_TIMEOUT    = 1200;  // ms máx. para intentar registrar
-  
+    const DEDUP_MS       = 15000; // ventana anti-duplicado (15s)
+
     function redirect() {
       window.location.href = MENU_URL;
     }
@@ -61,6 +62,13 @@
   
     async function logScan() {
       try {
+        // --- Anti-duplicado en el cliente ---
+        const now = Date.now();
+        const last = Number(sessionStorage.getItem("bubu_last_log") || 0);
+        if (now - last < DEDUP_MS) return;  // ya se registró hace poco
+        sessionStorage.setItem("bubu_last_log", String(now));
+
+        // Datos
         const ip = await Promise.race([
           getClientIP(),
           new Promise(res => setTimeout(() => res("timeout"), 800))
@@ -68,7 +76,8 @@
         const ua = navigator.userAgent || "unknown";
         const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "unknown";
         const ref = document.referrer || "direct";
-        const payload = JSON.stringify({ ip, ua, tz, ref, path: location.href });
+        const eid = `${now}-${Math.random().toString(36).slice(2,8)}`; // ID único del evento
+        const payload = JSON.stringify({ ip, ua, tz, ref, path: location.href, eid });
   
         // 1) Intento con sendBeacon (no bloquea)
         if (navigator.sendBeacon) {
