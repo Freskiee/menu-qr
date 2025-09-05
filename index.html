@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bububurger - Menú</title>
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #fff200; /* Amarillo vibrante como tu logo */
+      flex-direction: column;
+    }
+    img {
+      max-width: 250px;
+      height: auto;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+    p {
+      font-family: Arial, sans-serif;
+      margin-top: 15px;
+      font-weight: bold;
+      font-size: 18px;
+      color: #000;
+    }
+  </style>
+  <script>
+    // Redirige después de 2.5 segundos
+    setTimeout(() => {
+      window.location.href = "https://menu-bububurger.netlify.app/";
+    }, 2500);
+  </script>
+</head>
+<body>
+  <img src="logo-bubu.png" alt="Bububurger">
+  <p>Cargando menú...</p>
+</body>
+</html>
