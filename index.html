@@ -17,13 +17,14 @@
 
   <script>
     // === Config ===
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzB8UVibJniBM_nLe6LSRRVeuV9OGZIVl1fN6gJYSaYz7cnLWKU0dJUqwn1a61ZEEAB/exec"; // v4
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwZTdYzd1OkoeYJUBQljlTriFcx1StXi3gpoQ94z-9HHx3lwst59hDNww7F0KVt/exec"; // v5
     const MENU_URL   = "https://menu-bububurger.netlify.app/";
     const REDIRECT_DELAY = 2500;  // se queda en 2.5s
     const LOG_TIMEOUT    = 1200;
     const DEDUP_MS       = 15000;
 
-    function nowId(){ return `${Date.now()}-${Math.random().toString(36).slice(2,8)}` }
+    // Un solo EID por visita (se reutiliza en POST y GET)
+    const EID = `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
 
     async function getClientIP(){
       try {
@@ -50,50 +51,41 @@
       }catch{ return false }
     }
 
-    // Fallback por GET-pixel: SIEMPRE intenta un golpe al /exec
-    function pingGet(){
+    // Fallback por GET-pixel con el MISMO EID y la IP
+    function pingGet(ip){
       const img = new Image();
       img.referrerPolicy = "no-referrer";
-      img.src = SCRIPT_URL + "?t=" + Date.now();   // esto dispara tu doGet
-    }
-
-    let sentOnce = false;
-
-    async function logScan(){
-      try{
-        // Anti-duplicado en cliente
-        const now = Date.now();
-        const last = Number(sessionStorage.getItem("bubu_last_log")||0);
-        if (now - last < DEDUP_MS) return;
-        sessionStorage.setItem("bubu_last_log", String(now));
-
-        // Datos para POST
-        const ip  = await Promise.race([ getClientIP(), new Promise(res=>setTimeout(()=>res("timeout"),800)) ]);
-        const ua  = navigator.userAgent || "unknown";
-        const tz  = Intl.DateTimeFormat().resolvedOptions().timeZone || "unknown";
-        const ref = document.referrer || "direct";
-        const eid = nowId();
-        const payload = JSON.stringify({ ip, ua, tz, ref, path: location.href, eid });
-
-        // 1) POST (beacon/fetch)
-        sentOnce = sendLogPayload(payload);
-        // 2) Fallback inmediato por GET (garantiza registro en entornos caprichosos)
-        pingGet();
-
-        // 3) Reintento silente a los 600ms si hiciera falta
-        setTimeout(()=>{ if(!sentOnce) sendLogPayload(payload); }, 600);
-
-        // 4) Y al salir/ocultar, otro ping GET (no duplica porque tu servidor usa cache/eid)
-        const finalPing = ()=> pingGet();
-        document.addEventListener("visibilitychange", ()=>{ if (document.visibilityState!=="visible") finalPing(); }, {once:true});
-        window.addEventListener("pagehide", finalPing, {once:true});
-
-      }catch{/* no bloquear */}
+      // Solo paso ip y eid para no alargar la URL; el resto lo registra el POST
+      img.src = `${SCRIPT_URL}?eid=${encodeURIComponent(EID)}&ip=${encodeURIComponent(ip || "unknown")}&t=${Date.now()}`;
     }
 
     (async ()=>{
-      logScan();                                 // al entrar
-      setTimeout(()=>{ window.location.href = MENU_URL; }, REDIRECT_DELAY); // redirigir a los 2.5s
+      // Anti-duplicado en cliente (ventana corta)
+      const now = Date.now();
+      const last = Number(sessionStorage.getItem("bubu_last_log")||0);
+      if (now - last < DEDUP_MS) return;
+      sessionStorage.setItem("bubu_last_log", String(now));
+
+      // Datos para POST
+      const ip  = await Promise.race([ getClientIP(), new Promise(res=>setTimeout(()=>res("timeout"),800)) ]);
+      const ua  = navigator.userAgent || "unknown";
+      const tz  = Intl.DateTimeFormat().resolvedOptions().timeZone || "unknown";
+      const ref = document.referrer || "direct";
+      const payload = JSON.stringify({ ip, ua, tz, ref, path: location.href, eid: EID });
+
+      // 1) POST (beacon/fetch)
+      sendLogPayload(payload);
+
+      // 2) Fallback GET inmediato (mismo EID, incluye IP para que NO salga "manual-test")
+      pingGet(ip);
+
+      // 3) Reintento GET al salir/ocultar (mismo EID; servidor deduplica)
+      const finalPing = ()=> pingGet(ip);
+      document.addEventListener("visibilitychange", ()=>{ if (document.visibilityState!=="visible") finalPing(); }, {once:true});
+      window.addEventListener("pagehide", finalPing, {once:true});
+
+      // Redirección a los 2.5s
+      setTimeout(()=>{ window.location.href = MENU_URL; }, REDIRECT_DELAY);
     })();
   </script>
 </body>
